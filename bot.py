@@ -11,7 +11,7 @@ from main import work as sender_begin
 logging.basicConfig(level=logging.INFO)
 
 # Создание объектов бота и диспетчера
-bot = Bot(token='6222435439:AAGTs1tmqC0eiFgcJaCc04Bl8k7dkYNsuX8')
+bot = Bot(token='ТОКЕН')
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
