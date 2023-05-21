@@ -11,7 +11,7 @@ from main import work as sender_begin
 logging.basicConfig(level=logging.INFO)
 
 # Создание объектов бота и диспетчера
-bot = Bot(token='ВСТАВИТЬ ТОКЕН СЮДА')
+bot = Bot(token='6222435439:AAGTs1tmqC0eiFgcJaCc04Bl8k7dkYNsuX8')
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
@@ -27,17 +27,6 @@ class StateWorker(StatesGroup):
 @dp.message_handler(commands=['start'])
 async def start_command(message: types.Message):
     await message.answer("Привет! Держи меню.", reply_markup=nav.beginMenu)
-
-# Добавление Аккаунтов
-@dp.message_handler(state=StateWorker.recipients_list)
-async def add_recipients(message: types.Message, state: FSMContext):
-    recipients = message.text.splitlines()
-    if recipients:
-        await state.update_data(recipients=recipients)
-        await StateWorker.discount.set()
-        await message.answer("Теперь введите процент скидки")
-    else:
-        await message.answer("Список невалидный, попробуйте ещё раз")
 
 
 @dp.message_handler(state=StateWorker.discount)
@@ -70,24 +59,27 @@ async def set_link(message: types.Message, state: FSMContext):
 async def set_date(call: types.CallbackQuery, state: FSMContext):
     if call.data == 'launch':
         data = await state.get_data()
-        recipients = data['recipients']
-        discount = data['discount']
-        date = data['date']
-        link = data['link']
-        await call.message.edit_text(text='Рассылка запущена')
-        sender_begin(recipients,discount,date,link)
+        with open("recipients.txt", 'r') as file:
+            recipients = []
+            for recip in file.readlines():
+                recipients.append(recip)
+        if recipients:
+            discount = data['discount']
+            date = data['date']
+            link = data['link']
+            await call.message.edit_text(text='Рассылка запущена')
+            result = sender_begin(recipients,discount,date,link)
+            await call.message.answer(f"{result}", reply_markup=nav.beginMenu)
+        else:
+            await call.message.answer("Список получателей пуст.\nПроверьте файл recipients.txt и повторите попытку", reply_markup=nav.beginMenu)
         await state.finish()
-        await call.message.answer("Рассылка завершена", reply_markup=nav.beginMenu)
 
 # Обработка всех остальных сообщений
 @dp.callback_query_handler(state='*')
 async def menu(call: types.CallbackQuery, state: FSMContext):
     if call.data == 'begin':
-        await call.message.edit_text(text='Введите список адресатов в формате:\n'
-                                          'адрес1\n'
-                                          'адрес2\n'
-                                          '...')
-        await StateWorker.recipients_list.set()
+        await call.message.edit_text(text='Введите процент скидки')
+        await StateWorker.discount.set()
 
 
 # Запуск процесса поллинга новых апдейтов
