@@ -126,17 +126,23 @@ def work(recipients: list[str], percent: int, date: str, btn_link: str):
     log = ""
     try:
         for recipient in recipients:
-            message = MIMEText(html_content, 'html')
-            message['Subject'] = f'Вам присвоен промокод на {percent}%'
-            message['From'] = smtp_username
-            message['To'] = recipient
+                print(len(recipients))
+                message = MIMEText(html_content, 'html')
+                message['Subject'] = f'Вам присвоен промокод на {percent}%'
+                message['From'] = smtp_username
+                message['To'] = recipient
+                try:
+                    smtp_connection.send_message(message)
+                    print(f"Отправлено {recipient}")
+                    recipients.remove(recipient)
+                except Exception as e:
+                    if '550' in str(e) or '501' in str(e):
+                        print(e)
+                        recipients.remove(recipient)
+                        continue
+                    else:
+                        raise e
 
-            smtp_connection.send_message(message)
-            print(f"Отправлено {recipient}")
-            recipients.remove(recipient)
-
-        log = f"Рассылка успешно завершена"
-        print(log)
     except Exception as e:
         log = f"В процессе работы возникла ошибка:\n{e}\n\nРассылка экстренно завершена."
         print(log)
@@ -144,6 +150,9 @@ def work(recipients: list[str], percent: int, date: str, btn_link: str):
         with open("recipients.txt", 'w') as file:
             file.writelines(recipients)
         return log
+
+    log = f"Рассылка успешно завершена"
+    print(log)
 
     smtp_connection.quit()
     with open("recipients.txt", 'w') as file:
