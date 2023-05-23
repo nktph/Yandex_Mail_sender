@@ -5,7 +5,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import markups as nav
-from main import work as sender_begin
+from main import start as sender_begin
 
 # Установка уровня логирования
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +22,7 @@ class StateWorker(StatesGroup):
     date = State()
     link = State()
     work = State()
+
 
 # Обработка команды /start
 @dp.message_handler(commands=['start'])
@@ -68,7 +69,7 @@ async def set_date(call: types.CallbackQuery, state: FSMContext):
             date = data['date']
             link = data['link']
             await call.message.edit_text(text='Рассылка запущена')
-            result = sender_begin(recipients,discount,date,link)
+            result = await sender_begin(recipients,discount,date,link)
             await call.message.answer(f"{result}", reply_markup=nav.beginMenu)
         else:
             await call.message.answer("Список получателей пуст.\nПроверьте файл recipients.txt и повторите попытку", reply_markup=nav.beginMenu)

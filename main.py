@@ -1,28 +1,22 @@
-import smtplib
-import time
+import asyncio
 from email.mime.text import MIMEText
+from aiosmtplib import SMTP
 
 
-def work(recipients: list[str], percent: int, date: str, btn_link: str):
+def split_list(lst, chunks=3):
+    total_count = len(lst)
+    chunk_size = -(-total_count // chunks)
 
-    smtp_server = 'smtp.mail.ru'
-    smtp_port = 587
+    result = []
+    for i in range(chunks):
+        start_index = i * chunk_size
+        end_index = (i + 1) * chunk_size - 1
+        part = lst[start_index:end_index + 1]
+        result.append(part)
+    return result
 
-    with open("account.txt", 'r') as file:
-        data = file.readline()
-        username = data.split(':')[0].strip()
-        password = data.split(':')[1].strip()
 
-    smtp_username = username
-    smtp_password = password
-    smtp_connection = smtplib.SMTP(smtp_server, smtp_port)
-    smtp_connection.starttls()
-    try:
-        smtp_connection.login(smtp_username, smtp_password)
-    except Exception as e:
-        log = f"При авторизации возникла ошибка:\n{e}\n\nУбедитесь, что данные верны и повторите попытку."
-        print(log)
-        return log
+async def work(smtp_connection, username, recipients: list[str], percent: int, date: str, btn_link: str):
 
     header = f"Активируйте промокод на {percent}%"
     first_block = f"Промокод действует до {date}."
@@ -31,7 +25,6 @@ def work(recipients: list[str], percent: int, date: str, btn_link: str):
     fourth_block = "К одному чеку можно применить неограниченное количество позиций."
     fifth_block = "Спасибо, что выбираете наш магазин."
     link_text = "Активировать промокод"
-
     html_content = f'''
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
     <html lang="ru">
@@ -42,7 +35,6 @@ def work(recipients: list[str], percent: int, date: str, btn_link: str):
     </head>
     <body>
     <table border="0" cellpadding="0" cellspacing="0" style="margin:0; padding:0">
-    
       <tr>
           <td class="m_2772788490390005054column m_2772788490390005054column-1" width="100%" style="font-weight:400;text-align:left;padding-bottom:25px;padding-left:40px;padding-right:40px;padding-top:30px;vertical-align:top;border-top:0;border-right:0;border-bottom:0;border-left:0">
               <table class="m_2772788490390005054text_block m_2772788490390005054block-1" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="word-break:break-word">
@@ -118,43 +110,66 @@ def work(recipients: list[str], percent: int, date: str, btn_link: str):
           </td>
       </tr>
     </table>
-    
     </body>
     </html>
     '''
-
     log = ""
     try:
         for recipient in recipients:
-                print(len(recipients))
-                message = MIMEText(html_content, 'html')
-                message['Subject'] = f'Вам присвоен промокод на {percent}%'
-                message['From'] = smtp_username
-                message['To'] = recipient
-                try:
-                    smtp_connection.send_message(message)
-                    print(f"Отправлено {recipient}")
+            message = MIMEText(html_content, 'html')
+            message['Subject'] = f'Вам присвоен промокод на {percent}%'
+            message['From'] = username
+            message['To'] = recipient
+            print(f"Отправляем {recipient}")
+            try:
+                async with asyncio.Lock():
+                    await smtp_connection.send_message(message)
+                print(f"Отправлено {recipient}")
+                recipients.remove(recipient)
+            except Exception as e:
+                if '550' in str(e) or '501' in str(e):
+                    print(e)
                     recipients.remove(recipient)
-                except Exception as e:
-                    if '550' in str(e) or '501' in str(e):
-                        print(e)
-                        recipients.remove(recipient)
-                        continue
-                    else:
-                        raise e
-
+                    continue
+                else:
+                    raise e
     except Exception as e:
-        log = f"В процессе работы возникла ошибка:\n{e}\n\nРассылка экстренно завершена."
+        log = f"В процессе отправки {recipient} возникла ошибка:\n{e}\nРассылка экстренно завершена."
         print(log)
-        smtp_connection.quit()
-        with open("recipients.txt", 'w') as file:
-            file.writelines(recipients)
+        async with asyncio.Lock():
+            with open("recipients.txt", 'w') as file:
+                file.writelines(recipients)
         return log
-
-    log = f"Рассылка успешно завершена"
+    log = "Рассылка успешно завершена"
     print(log)
+    return log
 
-    smtp_connection.quit()
-    with open("recipients.txt", 'w') as file:
-        file.writelines(recipients)
+
+async def start(recipients: list[str], percent: int, date: str, btn_link: str):
+    # Делим список получателей на 4 части
+    list_chunks = split_list(recipients, chunks=4)
+
+    with open("account.txt", 'r') as file:
+        data = file.readline()
+        username = data.split(':')[0].strip()
+        password = data.split(':')[1].strip()
+
+    smtp_server = 'smtp.office365.com'
+    smtp_port = 587
+    async with SMTP(hostname=smtp_server, port=smtp_port, start_tls=True) as smtp_connection:
+        # Авторизуемся в почтовом клиенте
+        await smtp_connection.login(username, password)
+        # Выделяем работягу на каждый кусок списка
+        tasks = []
+        for chunk in list_chunks:
+            task = work(smtp_connection, username, chunk, percent, date, btn_link)
+            tasks.append(task)
+
+        results = await asyncio.gather(*tasks)
+        await smtp_connection.quit()
+    log = ""
+    i = 0
+    for result_log in results:
+        i += 1
+        log += f"{i}: {result_log}\n\n"
     return log
